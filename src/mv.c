@@ -1,0 +1,127 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+int mem[320];
+int regs[4] = {0, 0, 0, 0}; // a0 = regs[0], a1 = regs[1], etc
+int PC = 0;
+
+void ler_arquivo() {
+    FILE *arquivo = fopen("exercicio", "r");
+    if (!arquivo) {
+        printf("Erro ao abrir arquivo.\n");
+        exit(1);
+    }
+
+    int valor, pos = 0;
+    while (fscanf(arquivo, "%d", &valor) != EOF && pos < 320) {
+        mem[pos++] = valor;
+    }
+
+    fclose(arquivo);
+
+    printf("Memória após leitura do arquivo:\n");
+    for (int i = 0; i < 15; i++) {
+        printf("mem[%d] = %d\n", i, mem[i]);
+    }
+
+}
+
+void executar() {
+    printf("\nExecutando...\n");
+
+    while (1) {
+        int opcode = mem[PC++];
+
+        switch (opcode) {
+            case 0: { // add
+                int r0 = mem[PC++];
+                int r1 = mem[PC++];
+                int r2 = mem[PC++];
+                regs[r0] = regs[r1] + regs[r2];
+                break;
+            }
+            case 1: { // sub
+                int r0 = mem[PC++];
+                int r1 = mem[PC++];
+                int r2 = mem[PC++];
+                regs[r0] = regs[r1] - regs[r2];
+                break;
+            }
+            case 2: { // mul
+                int r0 = mem[PC++];
+                int r1 = mem[PC++];
+                int r2 = mem[PC++];
+                regs[r0] = regs[r1] * regs[r2];
+                break;
+            }
+            case 3: { // div
+                int r0 = mem[PC++];
+                int r1 = mem[PC++];
+                int r2 = mem[PC++];
+                if (regs[r2] != 0)
+                    regs[r0] = regs[r1] / regs[r2];
+                else
+                    printf("Erro: divisão por zero\n");
+                break;
+            }
+            case 4: { // mv reg = mem[pos]
+                int r = mem[PC++];
+                int pos = mem[PC++];
+                printf("mv: regs[%d] = mem[%d] → %d\n", r, pos, mem[pos]);
+                regs[r] = mem[pos];
+                break;
+            }
+            case 5: { // st mem[pos] = reg
+                int r = mem[PC++];
+                int pos = mem[PC++];
+                mem[pos] = regs[r];
+                break;
+            }
+            case 6: { // jmp
+                int pos = mem[PC++];
+                PC = pos;
+                break;
+            }
+            case 7: { // jeq r1 r2 pos
+                int r1 = mem[PC++];
+                int r2 = mem[PC++];
+                int pos = mem[PC++];
+                if (regs[r1] == regs[r2]) PC = pos;
+                break;
+            }
+            case 8: { // jgt r pos
+                int r = mem[PC++];
+                int pos = mem[PC++];
+                if (regs[r] > 0) PC = pos;
+                break;
+            }
+            case 9: { // jlt r pos
+                int r = mem[PC++];
+                int pos = mem[PC++];
+                if (regs[r] < 0) PC = pos;
+                break;
+            }
+            case 10: { // w pos
+                int pos = mem[PC++];
+                printf("%d\n", mem[pos]);
+                break;
+            }
+            case 11: { // r pos
+                int pos = mem[PC++];
+                scanf("%d", &mem[pos]);
+                break;
+            }
+            case 12: // stp
+                return;
+            default:
+                printf("Instrução inválida: %d\n", opcode);
+                return;
+        }
+    }
+}
+
+int main() {
+    ler_arquivo();
+    executar();
+    return 0;
+}
