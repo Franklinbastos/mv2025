@@ -20,7 +20,7 @@ void ler_arquivo() {
     fclose(arquivo);
 
     printf("Memória após leitura do arquivo:\n");
-    for (int i = 0; i < 15; i++) {
+    for (int i = 0; i < 50; i++) {
         printf("mem[%d] = %d\n", i, mem[i]);
     }
 
@@ -37,7 +37,10 @@ void executar() {
                 int r0 = mem[PC++];
                 int r1 = mem[PC++];
                 int r2 = mem[PC++];
-                regs[r0] = regs[r1] + regs[r2];
+                int result = regs[r1] + regs[r2];
+                regs[r0] = result;
+                printf("add: regs[%d] = regs[%d] + regs[%d] → %d + %d = %d\n",
+                    r0, r1, r2, regs[r1], regs[r2], result);
                 break;
             }
             case 1: { // sub
@@ -58,23 +61,25 @@ void executar() {
                 int r0 = mem[PC++];
                 int r1 = mem[PC++];
                 int r2 = mem[PC++];
-                if (regs[r2] != 0)
+                if (regs[r2] != 0) {
                     regs[r0] = regs[r1] / regs[r2];
-                else
+                } else {
                     printf("Erro: divisão por zero\n");
+                }
                 break;
             }
             case 4: { // mv reg = mem[pos]
                 int r = mem[PC++];
                 int pos = mem[PC++];
-                printf("mv: regs[%d] = mem[%d] → %d\n", r, pos, mem[pos]);
                 regs[r] = mem[pos];
+                printf("mv: regs[%d] = mem[%d] → %d\n", r, pos, mem[pos]);
                 break;
             }
             case 5: { // st mem[pos] = reg
                 int r = mem[PC++];
                 int pos = mem[PC++];
                 mem[pos] = regs[r];
+                printf("st: mem[%d] = regs[%d] → %d\n", pos, r, regs[r]);
                 break;
             }
             case 6: { // jmp
@@ -103,7 +108,7 @@ void executar() {
             }
             case 10: { // w pos
                 int pos = mem[PC++];
-                printf("%d\n", mem[pos]);
+                printf("w: mem[%d] = %d\n", pos, mem[pos]);
                 break;
             }
             case 11: { // r pos
@@ -112,6 +117,7 @@ void executar() {
                 break;
             }
             case 12: // stp
+                printf("stp: fim da execução\n");
                 return;
             default:
                 printf("Instrução inválida: %d\n", opcode);
