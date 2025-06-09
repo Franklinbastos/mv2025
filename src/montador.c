@@ -109,7 +109,6 @@ void primeira_passagem(FILE *fp) {
             token = strtok(NULL, " \t\n");
 
             if (!token) {
-                printf("[label isolada] reservando 1 pos em %d\n", endereco);
                 continue;
             }
         }
@@ -297,8 +296,8 @@ int main(int argc, char *argv[]) {
     }
 
     // você pode liberar isso aqui depois pra aceitar argv também
-    // printf("[montador] executando a MV...\n");
-    // system("./bin/mv");
+    printf("[montador] executando a MV...\n");
+    system("./bin/mv");
 
     return 0;
 }
