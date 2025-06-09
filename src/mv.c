@@ -18,12 +18,6 @@ void ler_arquivo() {
     }
 
     fclose(arquivo);
-
-    printf("Memória após leitura do arquivo:\n");
-    for (int i = 0; i < 50; i++) {
-        printf("mem[%d] = %d\n", i, mem[i]);
-    }
-
 }
 
 void executar() {
