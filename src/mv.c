@@ -92,6 +92,7 @@ void executar() {
             }
             case 11: { // r pos
                 int pos = mem[PC++];
+                printf("Digite valor para mem[%d]: ", pos);
                 scanf("%d", &mem[pos]);
                 break;
             }
