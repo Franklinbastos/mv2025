@@ -97,7 +97,6 @@ void primeira_passagem(FILE *fp) {
     }
 }
 
-
 void segunda_passagem(FILE *entrada, FILE *saida) {
     rewind(entrada);
     char linha[MAX_LINE];
@@ -106,8 +105,17 @@ void segunda_passagem(FILE *entrada, FILE *saida) {
         char *token = strtok(linha, " \t\n");
         if (!token) continue;
 
+        // pula label se houver
         if (strchr(token, ':')) token = strtok(NULL, " \t\n");
         if (!token) continue;
+
+        // trata .word antes de traduzir como instrução
+        if (strcmp(token, ".word") == 0) {
+            token = strtok(NULL, " \t\n");
+            if (token)
+                fprintf(saida, "%d\n", atoi(token));
+            continue;
+        }
 
         int opcode = traduz_instrucao(token);
         if (opcode == -1) continue;
