@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define DATA_START 270
 
 
 int mem[320];
@@ -63,15 +62,15 @@ void executar() {
             case 4: { // mv reg = mem[pos]
                 int r = mem[PC++];
                 int pos = mem[PC++];
-                regs[r] = mem[DATA_START + pos];
-                printf("mv: regs[%d] = mem[%d] → %d\n", r, DATA_START + pos, regs[r]);
+                regs[r] = mem[pos];
+                printf("mv: regs[%d] = mem[%d] → %d\n", r, pos, regs[r]);
                 break;
             }
             case 5: { // st mem[pos] = reg
                 int r = mem[PC++];
                 int pos = mem[PC++];
-                mem[DATA_START + pos] = regs[r];
-                printf("st: mem[%d] = regs[%d] → %d\n", DATA_START + pos, r, regs[r]);
+                mem[pos] = regs[r];
+                printf("st: mem[%d] = regs[%d] → %d\n", pos, r, regs[r]);
                 break;
             }
             case 6: { // jmp
@@ -113,13 +112,13 @@ void executar() {
             }
             case 10: { // w pos
                 int pos = mem[PC++];
-                printf("w: mem[%d] = %d\n", DATA_START + pos, mem[DATA_START + pos]);
+                printf("w: mem[%d] = %d\n", pos, mem[pos]);
                 break;
             }
             case 11: { // r pos
                 int pos = mem[PC++];
-                printf("r: digite valor para mem[%d]: ", DATA_START + pos);
-                scanf("%d", &mem[DATA_START + pos]);
+                printf("r: digite valor para mem[%d]: ", pos);
+                scanf("%d", &mem[pos]);
                 break;
             }
             case 12: {

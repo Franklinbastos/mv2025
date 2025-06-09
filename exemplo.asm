@@ -1,5 +1,3 @@
-    jmp START
-
 val1:   .word  10
 val2:   .word  5
 soma:   .word  0
