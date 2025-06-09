@@ -18,12 +18,24 @@ int buscar_rotulo(const char *nome) {
         if (strcmp(tabela_simbolos[i].nome, nome) == 0)
             return tabela_simbolos[i].endereco;
     }
-    return -1;
+
+    printf("[erro] label '%s' não encontrada!\n", nome);
+    exit(1);
 }
 
 void adicionar_rotulo(const char *nome, int endereco) {
+    // evita redefinir label
+    for (int i = 0; i < total_simbolos; i++) {
+        if (strcmp(tabela_simbolos[i].nome, nome) == 0) {
+            printf("[erro] label redefinida: %s\n", nome);
+            exit(1);
+        }
+    }
+
     strcpy(tabela_simbolos[total_simbolos].nome, nome);
     tabela_simbolos[total_simbolos].endereco = endereco;
+
+    printf("[label] %s = %d\n", nome, endereco);
     total_simbolos++;
 }
 
@@ -41,6 +53,8 @@ int traduz_instrucao(const char *instr) {
     if (strcmp(instr, "w")   == 0) return 10;
     if (strcmp(instr, "r")   == 0) return 11;
     if (strcmp(instr, "stp") == 0) return 12;
+
+    printf("[erro] instrução inválida: '%s'\n", instr);
     return -1;
 }
 
@@ -49,14 +63,28 @@ int traduz_reg(const char *reg) {
     if (strcmp(reg, "a1") == 0) return 1;
     if (strcmp(reg, "a2") == 0) return 2;
     if (strcmp(reg, "a3") == 0) return 3;
-    return atoi(reg);  // se for número direto
+
+    int valor = atoi(reg);
+    if (valor < 0 || valor > 3) {
+        printf("[erro] registrador inválido: '%s'\n", reg);
+        exit(1);
+    }
+
+    return valor;
 }
 
 void primeira_passagem(FILE *fp) {
     char linha[MAX_LINE];
     int endereco = 0;
+    int linha_num = 1;
 
     while (fgets(linha, sizeof(linha), fp)) {
+        printf("\n[linha %d] %s", linha_num++, linha);
+
+        // remover comentários (opcional futuramente)
+        char *comentario = strstr(linha, "//");
+        if (comentario) *comentario = '\0';
+
         char *token = strtok(linha, " \t\n");
         if (!token) continue;
 
@@ -65,39 +93,53 @@ void primeira_passagem(FILE *fp) {
             token[strlen(token) - 1] = '\0';
             adicionar_rotulo(token, endereco);
 
-            // pega próxima palavra da linha
             token = strtok(NULL, " \t\n");
 
-            // se não tiver mais nada, tipo: "FIM:", só pula pra próxima linha
-            if (!token) continue;
+            if (!token) {
+                printf("[label isolada] reservando 1 pos em %d\n", endereco);
+                endereco++;
+                continue;
+            }
         }
 
-        // se for .word
         if (strcmp(token, ".word") == 0) {
+            printf("[.word] reservado 1 posição em %d\n", endereco);
             endereco += 1;
             continue;
         }
 
-        // se for instrução
         int opcode = traduz_instrucao(token);
-        if (opcode == -1) continue;
+        if (opcode == -1) {
+            printf("[ignorado] instrução inválida ou não reconhecida\n");
+            continue;
+        }
 
-        endereco++;  // 1 para o opcode
-        if (opcode <= 3) endereco += 3;          // add, sub, mul, div
-        else if (opcode == 4 || opcode == 5) endereco += 2; // mv, st
-        else if (opcode == 6) endereco += 1;     // jmp
-        else if (opcode == 7) endereco += 3;     // jeq
-        else if (opcode == 8 || opcode == 9) endereco += 2; // jgt, jlt
-        else if (opcode == 10 || opcode == 11) endereco += 1; // w, r
-        // stp = só opcode
+        int usado = 1;
+        if (opcode <= 3) usado += 3;
+        else if (opcode == 4 || opcode == 5) usado += 2;
+        else if (opcode == 6) usado += 1;
+        else if (opcode == 7) usado += 3;
+        else if (opcode == 8 || opcode == 9) usado += 2;
+        else if (opcode == 10 || opcode == 11) usado += 1;
+        // stp = 1 já incluso
+
+        printf("[instrução] %s ocupa %d posições a partir de %d\n", token, usado, endereco);
+        endereco += usado;
     }
 }
 
 void segunda_passagem(FILE *entrada, FILE *saida) {
     rewind(entrada);
     char linha[MAX_LINE];
+    int linha_num = 1;
 
     while (fgets(linha, sizeof(linha), entrada)) {
+        printf("\n[segunda_passagem] linha %d: %s", linha_num++, linha);
+
+        // remover comentários se quiser futuramente
+        char *comentario = strstr(linha, "//");
+        if (comentario) *comentario = '\0';
+
         char *token = strtok(linha, " \t\n");
         if (!token) continue;
 
@@ -105,39 +147,64 @@ void segunda_passagem(FILE *entrada, FILE *saida) {
         if (strchr(token, ':')) token = strtok(NULL, " \t\n");
         if (!token) continue;
 
-        // trata .word antes de traduzir como instrução
+        // trata .word
         if (strcmp(token, ".word") == 0) {
             token = strtok(NULL, " \t\n");
-            if (token)
-                fprintf(saida, "%d\n", atoi(token));
+            if (token) {
+                int val = atoi(token);
+                printf("[.word] valor: %d\n", val);
+                fprintf(saida, "%d\n", val);
+            } else {
+                printf("[erro] .word sem valor\n");
+            }
             continue;
         }
 
         int opcode = traduz_instrucao(token);
         if (opcode == -1) continue;
 
+        printf("[instrução] %s (%d)\n", token, opcode);
         fprintf(saida, "%d\n", opcode);
 
+        // agora processa os operandos com debug
         if (opcode <= 3) {  // add, sub, mul, div
-            fprintf(saida, "%d\n", traduz_reg(strtok(NULL, " \t\n")));
-            fprintf(saida, "%d\n", traduz_reg(strtok(NULL, " \t\n")));
-            fprintf(saida, "%d\n", traduz_reg(strtok(NULL, " \t\n")));
+            char *r0 = strtok(NULL, " \t\n");
+            char *r1 = strtok(NULL, " \t\n");
+            char *r2 = strtok(NULL, " \t\n");
+            printf("  args: %s %s %s\n", r0, r1, r2);
+            fprintf(saida, "%d\n", traduz_reg(r0));
+            fprintf(saida, "%d\n", traduz_reg(r1));
+            fprintf(saida, "%d\n", traduz_reg(r2));
         } else if (opcode == 4 || opcode == 5) {  // mv, st
-            fprintf(saida, "%d\n", traduz_reg(strtok(NULL, " \t\n")));
-            fprintf(saida, "%d\n", buscar_rotulo(strtok(NULL, " \t\n")));
+            char *r = strtok(NULL, " \t\n");
+            char *label = strtok(NULL, " \t\n");
+            printf("  args: %s %s\n", r, label);
+            fprintf(saida, "%d\n", traduz_reg(r));
+            fprintf(saida, "%d\n", buscar_rotulo(label));
         } else if (opcode == 6) {  // jmp
-            fprintf(saida, "%d\n", buscar_rotulo(strtok(NULL, " \t\n")));
+            char *label = strtok(NULL, " \t\n");
+            printf("  arg: %s\n", label);
+            fprintf(saida, "%d\n", buscar_rotulo(label));
         } else if (opcode == 7) {  // jeq
-            fprintf(saida, "%d\n", traduz_reg(strtok(NULL, " \t\n")));
-            fprintf(saida, "%d\n", traduz_reg(strtok(NULL, " \t\n")));
-            fprintf(saida, "%d\n", buscar_rotulo(strtok(NULL, " \t\n")));
+            char *r1 = strtok(NULL, " \t\n");
+            char *r2 = strtok(NULL, " \t\n");
+            char *label = strtok(NULL, " \t\n");
+            printf("  args: %s %s %s\n", r1, r2, label);
+            fprintf(saida, "%d\n", traduz_reg(r1));
+            fprintf(saida, "%d\n", traduz_reg(r2));
+            fprintf(saida, "%d\n", buscar_rotulo(label));
         } else if (opcode == 8 || opcode == 9) {  // jgt, jlt
-            fprintf(saida, "%d\n", traduz_reg(strtok(NULL, " \t\n")));
-            fprintf(saida, "%d\n", buscar_rotulo(strtok(NULL, " \t\n")));
+            char *r = strtok(NULL, " \t\n");
+            char *label = strtok(NULL, " \t\n");
+            printf("  args: %s %s\n", r, label);
+            fprintf(saida, "%d\n", traduz_reg(r));
+            fprintf(saida, "%d\n", buscar_rotulo(label));
         } else if (opcode == 10 || opcode == 11) {  // w, r
-            fprintf(saida, "%d\n", buscar_rotulo(strtok(NULL, " \t\n")));
+            char *label = strtok(NULL, " \t\n");
+            printf("  arg: %s\n", label);
+            fprintf(saida, "%d\n", buscar_rotulo(label));
         }
-        // stp não precisa de nada
+        // stp (12) não tem argumento
     }
 }
 
@@ -145,9 +212,11 @@ int main(int argc, char *argv[]) {
     const char *arquivo_entrada = (argc >= 2) ? argv[1] : "exemplo.asm";
     const char *arquivo_saida   = "exercicio";
 
+    printf("[montador] lendo de '%s'\n", arquivo_entrada);
+
     FILE *fp = fopen(arquivo_entrada, "r");
     if (!fp) {
-        printf("Erro ao abrir %s\n", arquivo_entrada);
+        printf("[erro] não foi possível abrir '%s'\n", arquivo_entrada);
         return 1;
     }
 
@@ -155,21 +224,29 @@ int main(int argc, char *argv[]) {
 
     FILE *saida = fopen(arquivo_saida, "w");
     if (!saida) {
-        printf("Erro ao criar arquivo de saída %s\n", arquivo_saida);
+        printf("[erro] não foi possível criar o arquivo '%s'\n", arquivo_saida);
         fclose(fp);
         return 1;
     }
 
-    segunda_passagem(fp, saida);
+    segunda_passagem(fp, saia);
 
     fclose(fp);
     fclose(saida);
 
-    printf("Montagem finalizada com sucesso.\n");
+    printf("[montador] montagem finalizada com sucesso → '%s'\n", arquivo_saida);
 
-    // recompila e executa a MV (pode adaptar também pra aceitar argv depois)
-    system("gcc src/mv.c -o bin/mv");
-    system("./bin/mv");
+    // recompila a máquina virtual
+    printf("[montador] compilando mv.c...\n");
+    int compile_status = system("gcc src/mv.c -o bin/mv");
+    if (compile_status != 0) {
+        printf("[erro] falha na compilação da máquina virtual.\n");
+        return 1;
+    }
+
+    // você pode liberar isso aqui depois pra aceitar argv também
+    // printf("[montador] executando a MV...\n");
+    // system("./bin/mv");
 
     return 0;
 }

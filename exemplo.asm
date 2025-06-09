@@ -1,22 +1,33 @@
-val1:   .word 0
-val2:   .word 0
-soma:   .word 0
-ctrl:   .word 3
+val1:  .word 8
+val2:  .word 2
+temp:  .word 0
+res:   .word 0
+input: .word 0
 
-INICIO:
-    r val1
-    r val2
+mv a2 val1
+mv a3 val2
 
-    mv a2 val1
-    mv a3 val2
-    add a0 a2 a3
-    st a0 soma
-    w soma
+add a0 a2 a3
+st a0 res
 
-    mv a1 ctrl
-    sub a1 a1 a3
-    st a1 ctrl
+sub a0 a2 a3
+st a0 res
 
-    jgt a1 INICIO
+mul a0 a2 a3
+st a0 res
 
-    stp
+div a0 a2 a3
+st a0 res
+
+jmp FIM
+
+SALTO:
+mv a0 val1
+st a0 temp
+
+OK:
+w res
+r input
+
+FIM:
+stp
