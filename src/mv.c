@@ -5,21 +5,6 @@ int mem[320];
 int regs[4] = {0, 0, 0, 0}; // a0 = regs[0], a1 = regs[1], etc
 int PC = 0;
 
-void ler_arquivo() {
-    FILE *arquivo = fopen("exercicio", "r");
-    if (!arquivo) {
-        printf("Erro ao abrir arquivo.\n");
-        exit(1);
-    }
-
-    int valor, pos = 0;
-    while (fscanf(arquivo, "%d", &valor) != EOF && pos < 320) {
-        mem[pos++] = valor;
-    }
-
-    fclose(arquivo);
-}
-
 void executar() {
     printf("\nExecutando...\n");
 
@@ -120,8 +105,22 @@ void executar() {
     }
 }
 
-int main() {
-    ler_arquivo();
+int main(int argc, char *argv[]) {
+    const char *arquivo_nome = (argc >= 2) ? argv[1] : "exercicio";
+
+    FILE *arquivo = fopen(arquivo_nome, "r");
+    if (!arquivo) {
+        printf("Erro ao abrir arquivo: %s\n", arquivo_nome);
+        return 1;
+    }
+
+    int valor, pos = 0;
+    while (fscanf(arquivo, "%d", &valor) != EOF && pos < 320) {
+        mem[pos++] = valor;
+    }
+    fclose(arquivo);
+
     executar();
     return 0;
 }
+

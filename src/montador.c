@@ -60,40 +60,36 @@ void primeira_passagem(FILE *fp) {
         char *token = strtok(linha, " \t\n");
         if (!token) continue;
 
+        // check se tem label
         if (strchr(token, ':')) {
             token[strlen(token) - 1] = '\0';
-            char label[MAX_LABELS];
-            strcpy(label, token);
+            adicionar_rotulo(token, endereco);
 
+            // pega próxima palavra da linha
             token = strtok(NULL, " \t\n");
+
+            // se não tiver mais nada, tipo: "FIM:", só pula pra próxima linha
             if (!token) continue;
-
-            // se for .word, registra label e avança 1 no endereco
-            if (strcmp(token, ".word") == 0) {
-                adicionar_rotulo(label, endereco);
-                endereco++;  // ocupa 1 posição na memória
-                continue;
-            }
-
-            // se não, é uma instrução com label na frente
-            int opcode = traduz_instrucao(token);
-            if (opcode != -1) {
-                adicionar_rotulo(label, endereco);
-            }
         }
 
-        if (!token) continue;
+        // se for .word
+        if (strcmp(token, ".word") == 0) {
+            endereco += 1;
+            continue;
+        }
 
+        // se for instrução
         int opcode = traduz_instrucao(token);
         if (opcode == -1) continue;
 
         endereco++;  // 1 para o opcode
-        if (opcode <= 3) endereco += 3;
-        else if (opcode == 4 || opcode == 5) endereco += 2;
-        else if (opcode == 6) endereco += 1;
-        else if (opcode == 7) endereco += 3;
-        else if (opcode == 8 || opcode == 9) endereco += 2;
-        else if (opcode == 10 || opcode == 11) endereco += 1;
+        if (opcode <= 3) endereco += 3;          // add, sub, mul, div
+        else if (opcode == 4 || opcode == 5) endereco += 2; // mv, st
+        else if (opcode == 6) endereco += 1;     // jmp
+        else if (opcode == 7) endereco += 3;     // jeq
+        else if (opcode == 8 || opcode == 9) endereco += 2; // jgt, jlt
+        else if (opcode == 10 || opcode == 11) endereco += 1; // w, r
+        // stp = só opcode
     }
 }
 
@@ -145,18 +141,22 @@ void segunda_passagem(FILE *entrada, FILE *saida) {
     }
 }
 
-int main() {
-    FILE *fp = fopen("exemplo.asm", "r");
+int main(int argc, char *argv[]) {
+    const char *arquivo_entrada = (argc >= 2) ? argv[1] : "exemplo.asm";
+    const char *arquivo_saida   = "exercicio";
+
+    FILE *fp = fopen(arquivo_entrada, "r");
     if (!fp) {
-        printf("Erro ao abrir exemplo.asm\n");
+        printf("Erro ao abrir %s\n", arquivo_entrada);
         return 1;
     }
 
     primeira_passagem(fp);
 
-    FILE *saida = fopen("exercicio", "w");
+    FILE *saida = fopen(arquivo_saida, "w");
     if (!saida) {
-        printf("Erro ao criar arquivo de saída\n");
+        printf("Erro ao criar arquivo de saída %s\n", arquivo_saida);
+        fclose(fp);
         return 1;
     }
 
@@ -167,11 +167,10 @@ int main() {
 
     printf("Montagem finalizada com sucesso.\n");
 
-    // recompila a máquina virtual
+    // recompila e executa a MV (pode adaptar também pra aceitar argv depois)
     system("gcc src/mv.c -o bin/mv");
-
-    // executa a máquina virtual
     system("./bin/mv");
-    
+
     return 0;
 }
+
