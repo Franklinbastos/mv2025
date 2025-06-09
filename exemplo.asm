@@ -1,33 +1,14 @@
-val1:  .word 8
-val2:  .word 2
-temp:  .word 0
-res:   .word 0
-input: .word 0
+.word 0
+.word 5
+.word 10
 
-mv a2 val1
-mv a3 val2
-
-add a0 a2 a3
-st a0 res
-
-sub a0 a2 a3
-st a0 res
-
-mul a0 a2 a3
-st a0 res
-
-div a0 a2 a3
-st a0 res
-
+INICIO:
+mv a0 1
+mv a1 2
+add a2 a0 a1
+st a2 0
+w 0
 jmp FIM
-
-SALTO:
-mv a0 val1
-st a0 temp
-
-OK:
-w res
-r input
 
 FIM:
 stp
