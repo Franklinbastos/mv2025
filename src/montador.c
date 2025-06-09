@@ -166,5 +166,12 @@ int main() {
     fclose(saida);
 
     printf("Montagem finalizada com sucesso.\n");
+
+    // recompila a máquina virtual
+    system("gcc src/mv.c -o bin/mv");
+
+    // executa a máquina virtual
+    system("./bin/mv");
+    
     return 0;
 }
