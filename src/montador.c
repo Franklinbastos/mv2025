@@ -229,7 +229,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    segunda_passagem(fp, saia);
+    segunda_passagem(fp, saida);
 
     fclose(fp);
     fclose(saida);
