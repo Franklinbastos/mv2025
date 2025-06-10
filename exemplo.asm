@@ -1,45 +1,37 @@
-val1:   .word  10
-val2:   .word  5
-soma:   .word  0
-sub:    .word  0
-mult:   .word  0
-div:    .word  0
-cmp:    .word  0
+num1:    .word 10
+num2:    .word 5
+res:     .word 0
+cmp:     .word 0
+val_100: .word 100
+val_200: .word 200
+val_300: .word 300
+temp:    .word 0
 
 START:
-    mv a0 val1
-    mv a1 val2
+    r num1
+    r num2
 
-    add a2 a0 a1
-    st a2 soma
-
-    sub a2 a0 a1
-    st a2 sub
-
-    mul a2 a0 a1
-    st a2 mult
-
-    div a2 a0 a1
-    st a2 div
-
+    mv a0 num1
+    mv a1 num2
     sub a2 a0 a1
     st a2 cmp
 
-    jeq a0 a1 IGUAL
-    jgt a2 MAIOR
-    jlt a2 MENOR
+    jeq a0 a1 IGUAL   ; se forem iguais
+    jgt a2 MAIOR      ; se a0 > a1 → a2 > 0
+    jmp MENOR         ; se não caiu em nenhum, é menor
 
 IGUAL:
-    w soma
+    mv a3 val_100
     jmp FIM
 
 MAIOR:
-    w sub
+    mv a3 val_200
     jmp FIM
 
 MENOR:
-    w mult
+    mv a3 val_300
 
 FIM:
-    w div
+    st a3 res
+    w res
     stp
