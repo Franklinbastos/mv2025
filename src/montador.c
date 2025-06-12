@@ -2,58 +2,98 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include "../include/linker_defs.h"
 
-#define MAX_LABELS 100
 #define MAX_LINE 100
-#define TAM_MEM 320
+#define DEBUG_VISUAL  // descomente esta linha pra ativar visualização do binário final
 
-typedef struct {
-    char nome[20];
-    int endereco;
-} Simbolo;
+ObjectFile obj_file;
 
-Simbolo tabela_simbolos[MAX_LABELS];
-int total_simbolos = 0;
+int find_symbol_in_use_table(const char* name) {
+    for (int i = 0; i < obj_file.use_count; i++) {
+        if (strcmp(obj_file.use_table[i].name, name) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
 
-int pos_dados = 270;  // início da área de dados
+int add_symbol_to_use_table(const char* name) {
+    int index = find_symbol_in_use_table(name);
+    if (index != -1) {
+        return index;
+    }
+    if (obj_file.use_count >= MAX_SYMBOLS) {
+        printf("[montador] Erro: Limite de símbolos de uso excedido.\n");
+        exit(1);
+    }
+    strcpy(obj_file.use_table[obj_file.use_count].name, name);
+    printf("[use] símbolo externo: %s\n", name);
+    return obj_file.use_count++;
+}
 
 int buscar_rotulo(const char *nome) {
-    for (int i = 0; i < total_simbolos; i++) {
-        if (strcmp(tabela_simbolos[i].nome, nome) == 0)
-            return tabela_simbolos[i].endereco;
+    for (int i = 0; i < obj_file.def_count; i++) {
+        if (strcmp(obj_file.def_table[i].name, nome) == 0)
+            return obj_file.def_table[i].address;
     }
-
-    printf("[erro] label '%s' não encontrada!\n", nome);
-    exit(1);
+    return -1;
 }
 
-// função interna que trata números ou labels
-int traduz_ou_busca(const char *arg) {
+int traduz_ou_busca(const char *arg, int current_address) {
     if (isdigit(arg[0]) || (arg[0] == '-' && isdigit(arg[1])))
         return atoi(arg);
-    return buscar_rotulo(arg);
+
+    int address = buscar_rotulo(arg);
+    if (address != -1) {
+        if (obj_file.rel_count >= MAX_SYMBOLS) {
+             printf("[montador] Erro: Limite de entradas na tabela de relocação excedido.\n");
+             exit(1);
+        }
+        obj_file.rel_table[obj_file.rel_count].address = current_address;
+        obj_file.rel_table[obj_file.rel_count].symbol_index = -1;
+        obj_file.rel_table[obj_file.rel_count].type = 0;
+        obj_file.rel_count++;
+        printf("[relativo] símbolo local '%s' na posição %d\n", arg, current_address);
+        return address;
+    }
+
+    int symbol_index = add_symbol_to_use_table(arg);
+    if (obj_file.rel_count >= MAX_SYMBOLS) {
+         printf("[montador] Erro: Limite de entradas na tabela de relocação excedido.\n");
+         exit(1);
+    }
+    obj_file.rel_table[obj_file.rel_count].address = current_address;
+    obj_file.rel_table[obj_file.rel_count].symbol_index = symbol_index;
+    obj_file.rel_table[obj_file.rel_count].type = 1;
+    obj_file.rel_count++;
+    printf("[externo] símbolo '%s' na posição %d\n", arg, current_address);
+    return 0;
 }
 
-// registra label: se for .word, vai pra área de dados; senão, usa o PC atual
-void adicionar_rotulo(const char *nome, int endereco) {
-    for (int i = 0; i < total_simbolos; i++) {
-        if (strcmp(tabela_simbolos[i].nome, nome) == 0) {
+void adicionar_rotulo(const char *nome, int endereco, int type) {
+    for (int i = 0; i < obj_file.def_count; i++) {
+        if (strcmp(obj_file.def_table[i].name, nome) == 0) {
+            if (obj_file.def_table[i].type == 0 && obj_file.def_table[i].address == 0) { 
+                obj_file.def_table[i].address = endereco;
+                printf("[label] %s (GLOBAL) atualizado para o endereço %d\n", nome, endereco);
+                return;
+            }
             printf("[erro] label redefinida: %s\n", nome);
             exit(1);
         }
     }
-
-    // label de .word começa com "__DATA__:"
-    if (strncmp(nome, "__DATA__:", 9) == 0) {
-        nome += 9;
-        endereco = pos_dados++;
+    if (obj_file.def_count >= MAX_SYMBOLS) {
+        printf("[montador] Erro: Limite de símbolos de definição excedido.\n");
+        exit(1);
     }
 
-    strcpy(tabela_simbolos[total_simbolos].nome, nome);
-    tabela_simbolos[total_simbolos].endereco = endereco;
+    strcpy(obj_file.def_table[obj_file.def_count].name, nome);
+    obj_file.def_table[obj_file.def_count].address = endereco;
+    obj_file.def_table[obj_file.def_count].type = type;
 
     printf("[label] %s = %d\n", nome, endereco);
-    total_simbolos++;
+    obj_file.def_count++;
 }
 
 int traduz_instrucao(const char *instr) {
@@ -70,6 +110,8 @@ int traduz_instrucao(const char *instr) {
     if (strcmp(instr, "w")   == 0) return 10;
     if (strcmp(instr, "r")   == 0) return 11;
     if (strcmp(instr, "stp") == 0) return 12;
+    if (strcmp(instr, "GLOBAL") == 0) return 13;
+    if (strcmp(instr, "EXTERN") == 0) return 14;
 
     printf("[erro] instrução inválida: '%s'\n", instr);
     return -1;
@@ -93,50 +135,45 @@ int traduz_reg(const char *reg) {
 void primeira_passagem(FILE *fp) {
     char linha[MAX_LINE];
     int end_instrucao = 0;
-    int end_dado = 270;
-    int linha_num = 1;
+    memset(&obj_file, 0, sizeof(ObjectFile));
 
     while (fgets(linha, sizeof(linha), fp)) {
-        printf("\n[linha %d] %s", linha_num++, linha);
-
-        // remover comentários
         char *comentario = strstr(linha, "//");
         if (comentario) *comentario = '\0';
 
         char *token = strtok(linha, " \t\n");
         if (!token) continue;
 
-        int usando_word = 0;
-
-        // se tem label
-        if (strchr(token, ':')) {
-            token[strlen(token) - 1] = '\0'; // remove ':'
-            char *prox = strtok(NULL, " \t\n");
-
-            // se próxima token for .word, label aponta pra área de dados
-            if (prox && strcmp(prox, ".word") == 0) {
-                adicionar_rotulo(token, end_dado);
-                usando_word = 1;
-                token = prox;
-            } else {
-                adicionar_rotulo(token, end_instrucao);
-                token = prox;
+        if (strcmp(token, "GLOBAL") == 0) {
+            char* symbol = strtok(NULL, " \t\n");
+            if (buscar_rotulo(symbol) != -1) {
+                printf("[erro] Símbolo GLOBAL '%s' já definido como label local.\n", symbol);
+                exit(1);
             }
+            adicionar_rotulo(symbol, 0, 0);
+            continue;
+        }
 
+        if (strcmp(token, "EXTERN") == 0) {
+            char* symbol = strtok(NULL, " \t\n");
+            add_symbol_to_use_table(symbol);
+            continue;
+        }
+
+        if (strchr(token, ':')) {
+            token[strlen(token) - 1] = '\0';
+            adicionar_rotulo(token, end_instrucao, 0);
+            token = strtok(NULL, " \t\n");
             if (!token) continue;
         }
 
         if (strcmp(token, ".word") == 0) {
-            printf("[.word] reservado 1 posição em %d\n", end_dado);
-            end_dado += 1;
+            end_instrucao += 1;
             continue;
         }
 
         int opcode = traduz_instrucao(token);
-        if (opcode == -1) {
-            printf("[ignorado] instrução inválida ou não reconhecida\n");
-            continue;
-        }
+        if (opcode == -1) continue;
 
         int usado = 1;
         if (opcode <= 3) usado += 3;
@@ -146,57 +183,35 @@ void primeira_passagem(FILE *fp) {
         else if (opcode == 8 || opcode == 9) usado += 2;
         else if (opcode == 10 || opcode == 11) usado += 1;
 
-        printf("[instrução] %s ocupa %d posições a partir de %d\n", token, usado, end_instrucao);
         end_instrucao += usado;
     }
+    obj_file.code_size = end_instrucao;
+    printf("[info] tamanho do código: %d\n", end_instrucao);
 }
 
 void segunda_passagem(FILE *entrada, FILE *saida) {
     rewind(entrada);
     char linha[MAX_LINE];
-    int linha_num = 1;
-
-    int memoria[320] = {0};
     int pc_instrucao = 0;
-    int pos_dados = 270;
 
     while (fgets(linha, sizeof(linha), entrada)) {
-        printf("\n[segunda_passagem] linha %d: %s", linha_num++, linha);
-
         char *comentario = strstr(linha, "//");
         if (comentario) *comentario = '\0';
 
         char *token = strtok(linha, " \t\n");
-        if (!token) continue;
+        if (!token || strcmp(token, "GLOBAL") == 0 || strcmp(token, "EXTERN") == 0) continue;
 
-        // verifica se é uma label
-        char *label_nome = NULL;
         if (strchr(token, ':')) {
-            token[strlen(token) - 1] = '\0'; // remove ':'
-            label_nome = token;             // salva o nome
-            token = strtok(NULL, " \t\n");  // pega próximo token
+            token = strtok(NULL, " \t\n");
             if (!token) continue;
         }
 
-        // trata .word
         if (strcmp(token, ".word") == 0) {
             token = strtok(NULL, " \t\n");
             if (token) {
-                int val = atoi(token);
-                int destino = pos_dados++;
-                memoria[destino] = val;
-
-                if (label_nome) {
-
-                } else {
-                    printf("[erro] .word sem label\n");
-                    exit(1);
-                }
-
-                printf("[.word] valor %d em mem[%d]\n", val, destino);
-            } else {
-                printf("[erro] .word sem valor\n");
-                exit(1);
+                obj_file.code[pc_instrucao] = atoi(token);
+                printf("[word] mem[%03d] = %d\n", pc_instrucao, obj_file.code[pc_instrucao]);
+                pc_instrucao++;
             }
             continue;
         }
@@ -204,74 +219,51 @@ void segunda_passagem(FILE *entrada, FILE *saida) {
         int opcode = traduz_instrucao(token);
         if (opcode == -1) continue;
 
-        printf("[instrução] %s (%d)\n", token, opcode);
-        memoria[pc_instrucao++] = opcode;
+        obj_file.code[pc_instrucao++] = opcode;
 
         if (opcode <= 3) {
-            memoria[pc_instrucao++] = traduz_reg(strtok(NULL, " \t\n"));
-            memoria[pc_instrucao++] = traduz_reg(strtok(NULL, " \t\n"));
-            memoria[pc_instrucao++] = traduz_reg(strtok(NULL, " \t\n"));
-        } else if (opcode == 4 || opcode == 5) {
-            memoria[pc_instrucao++] = traduz_reg(strtok(NULL, " \t\n"));
-            memoria[pc_instrucao++] = traduz_ou_busca(strtok(NULL, " \t\n"));
-        } else if (opcode == 6) {
-            memoria[pc_instrucao++] = traduz_ou_busca(strtok(NULL, " \t\n"));
-        } else if (opcode == 7) {
-            memoria[pc_instrucao++] = traduz_reg(strtok(NULL, " \t\n"));
-            memoria[pc_instrucao++] = traduz_reg(strtok(NULL, " \t\n"));
-            memoria[pc_instrucao++] = traduz_ou_busca(strtok(NULL, " \t\n"));
-        } else if (opcode == 8 || opcode == 9) {
-            memoria[pc_instrucao++] = traduz_reg(strtok(NULL, " \t\n"));
-            memoria[pc_instrucao++] = traduz_ou_busca(strtok(NULL, " \t\n"));
-        } else if (opcode == 10 || opcode == 11) {
-            memoria[pc_instrucao++] = traduz_ou_busca(strtok(NULL, " \t\n"));
+            obj_file.code[pc_instrucao++] = traduz_reg(strtok(NULL, " \t\n"));
+            obj_file.code[pc_instrucao++] = traduz_reg(strtok(NULL, " \t\n"));
+            obj_file.code[pc_instrucao++] = traduz_reg(strtok(NULL, " \t\n"));
+        } else if (opcode >= 4 && opcode <= 11) {
+            char* arg1 = strtok(NULL, " \t\n");
+            if (opcode == 4 || opcode == 5 || opcode == 8 || opcode == 9) {
+                 obj_file.code[pc_instrucao] = traduz_reg(arg1);
+                 pc_instrucao++;
+                 char* arg2 = strtok(NULL, " \t\n");
+                 obj_file.code[pc_instrucao] = traduz_ou_busca(arg2, pc_instrucao);
+                 pc_instrucao++;
+            } else if (opcode == 6 || opcode == 10 || opcode == 11) {
+                 obj_file.code[pc_instrucao] = traduz_ou_busca(arg1, pc_instrucao);
+                 pc_instrucao++;
+            } else if (opcode == 7) {
+                 obj_file.code[pc_instrucao] = traduz_reg(arg1);
+                 pc_instrucao++;
+                 char* arg2 = strtok(NULL, " \t\n");
+                 obj_file.code[pc_instrucao] = traduz_reg(arg2);
+                 pc_instrucao++;
+                 char* arg3 = strtok(NULL, " \t\n");
+                 obj_file.code[pc_instrucao] = traduz_ou_busca(arg3, pc_instrucao);
+                 pc_instrucao++;
+            }
         }
     }
 
-    for (int i = 0; i < 320; i++) {
-        fprintf(saida, "%d\n", memoria[i]);
-    }
-
-    printf("\n--- BINÁRIO GERADO ---\n");
-    int i = 0;
-    while (i < TAM_MEM) {
-        if (memoria[i] != 0) {
-            printf("mem[%03d] = %d\n", i, memoria[i]);
-            i++;
-        } else {
-            int start = i;
-            while (i < TAM_MEM && memoria[i] == 0) i++;
-            int end = i - 1;
-            if (start == end)
-                printf("mem[%03d] = 0\n", start);
-            else
-                printf("mem[%03d–%03d] = 0\n", start, end);
-        }
-    }
+    fwrite(&obj_file, sizeof(ObjectFile), 1, saida);
 }
 
+
 int main(int argc, char *argv[]) {
-    const char *arquivo_entrada = (argc >= 2) ? argv[1] : "exemplo.asm";
-    const char *arquivo_saida   = "exercicio";
-
-    printf("[montador] lendo de '%s'\n", arquivo_entrada);
-
-    FILE *fp = fopen(arquivo_entrada, "r");
-
-    // DEBUG: mostrar o código ASM original
-    printf("\n--- CÓDIGO ASM ORIGINAL (%s) ---\n", arquivo_entrada);
-    FILE *leitura = fopen(arquivo_entrada, "r");
-    if (leitura) {
-        char linha[MAX_LINE];
-        int lin = 1;
-        while (fgets(linha, sizeof(linha), leitura)) {
-            printf("%2d: %s", lin++, linha);
-        }
-        fclose(leitura);
-    } else {
-        printf("[erro] falha ao reabrir '%s'\n", arquivo_entrada);
+    if (argc < 2) {
+        printf("Uso: %s <arquivo.asm>\n", argv[0]);
+        return 1;
     }
 
+    const char *arquivo_entrada = argv[1];
+    char arquivo_saida[100];
+    sprintf(arquivo_saida, "%s.o", arquivo_entrada);
+
+    FILE *fp = fopen(arquivo_entrada, "r");
     if (!fp) {
         printf("[erro] não foi possível abrir '%s'\n", arquivo_entrada);
         return 1;
@@ -279,7 +271,7 @@ int main(int argc, char *argv[]) {
 
     primeira_passagem(fp);
 
-    FILE *saida = fopen(arquivo_saida, "w");
+    FILE *saida = fopen(arquivo_saida, "wb");
     if (!saida) {
         printf("[erro] não foi possível criar o arquivo '%s'\n", arquivo_saida);
         fclose(fp);
@@ -291,56 +283,14 @@ int main(int argc, char *argv[]) {
     fclose(fp);
     fclose(saida);
 
-    printf("[montador] montagem finalizada com sucesso → '%s'\n", arquivo_saida);
-
-   // DEBUG: mostrar o binário gerado com resumo de zeros
-    printf("\n--- BINÁRIO GERADO ---\n");
-    FILE *verif = fopen(arquivo_saida, "r");
-    if (verif) {
-        int val, i = 0;
-        int zero_ini = -1;
-
-        while (fscanf(verif, "%d", &val) != EOF) {
-            if (val == 0) {
-                if (zero_ini == -1)
-                    zero_ini = i; // início da sequência de zeros
-            } else {
-                if (zero_ini != -1) {
-                    if (i - 1 == zero_ini)
-                        printf("mem[%03d] = 0\n", zero_ini);
-                    else
-                        printf("mem[%03d–%03d] = 0\n", zero_ini, i - 1);
-                    zero_ini = -1;
-                }
-                printf("mem[%03d] = %d\n", i, val);
-            }
-            i++;
-        }
-
-        if (zero_ini != -1) {
-            if (i - 1 == zero_ini)
-                printf("mem[%03d] = 0\n", zero_ini);
-            else
-                printf("mem[%03d–%03d] = 0\n", zero_ini, i - 1);
-        }
-
-        fclose(verif);
-    } else {
-        printf("[erro] não foi possível reabrir '%s'\n", arquivo_saida);
+#ifdef DEBUG_VISUAL
+    printf("\n--- BINÁRIO FINAL GERADO (VISUAL) ---\n");
+    for (int i = 0; i < obj_file.code_size; i++) {
+        printf("mem[%03d] = %d\n", i, obj_file.code[i]);
     }
+#endif
 
-    // recompila a máquina virtual
-    printf("[montador] compilando mv.c...\n");
-    int compile_status = system("gcc src/mv.c -o bin/mv");
-    if (compile_status != 0) {
-        printf("[erro] falha na compilação da máquina virtual.\n");
-        return 1;
-    }
-
-    // você pode liberar isso aqui depois pra aceitar argv também
-    printf("[montador] executando a MV...\n");
-    system("./bin/mv");
+    printf("[montador] montagem finalizada com sucesso -> '%s'\n", arquivo_saida);
 
     return 0;
 }
-
