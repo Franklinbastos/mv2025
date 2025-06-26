@@ -151,7 +151,7 @@ int main(int argc, char *argv[]) {
         mem[pos++] = valor;
     }
     fclose(arquivo);
-    printf("[mv] carregamento concluído: %d instruções lidas\n", pos);
+    printf("[mv] carregamento concluído: %d posicões lidas\n", pos);
 
     executar();
     return 0;

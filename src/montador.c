@@ -293,42 +293,6 @@ int main(int argc, char *argv[]) {
 
     printf("[montador] montagem finalizada com sucesso → '%s'\n", arquivo_saida);
 
-   // DEBUG: mostrar o binário gerado com resumo de zeros
-    printf("\n--- BINÁRIO GERADO ---\n");
-    FILE *verif = fopen(arquivo_saida, "r");
-    if (verif) {
-        int val, i = 0;
-        int zero_ini = -1;
-
-        while (fscanf(verif, "%d", &val) != EOF) {
-            if (val == 0) {
-                if (zero_ini == -1)
-                    zero_ini = i; // início da sequência de zeros
-            } else {
-                if (zero_ini != -1) {
-                    if (i - 1 == zero_ini)
-                        printf("mem[%03d] = 0\n", zero_ini);
-                    else
-                        printf("mem[%03d–%03d] = 0\n", zero_ini, i - 1);
-                    zero_ini = -1;
-                }
-                printf("mem[%03d] = %d\n", i, val);
-            }
-            i++;
-        }
-
-        if (zero_ini != -1) {
-            if (i - 1 == zero_ini)
-                printf("mem[%03d] = 0\n", zero_ini);
-            else
-                printf("mem[%03d–%03d] = 0\n", zero_ini, i - 1);
-        }
-
-        fclose(verif);
-    } else {
-        printf("[erro] não foi possível reabrir '%s'\n", arquivo_saida);
-    }
-
     // recompila a máquina virtual
     printf("[montador] compilando mv.c...\n");
     int compile_status = system("gcc src/mv.c -o bin/mv");
