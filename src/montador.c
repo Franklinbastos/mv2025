@@ -137,7 +137,7 @@ int traduz_reg(const char *reg) {
     return valor;
 }
 
-// faz a primeira varredura no arquivo ASM:
+// monta tabela de simbolos
 // calcula endereços das instruções e registra labels, GLOBALs e EXTERNs
 void primeira_passagem(FILE *fp) {
     char linha[MAX_LINE];
@@ -151,7 +151,7 @@ void primeira_passagem(FILE *fp) {
         char *token = strtok(linha, " \t\n");// pega a primeira palavra 
         if (!token) continue;
 
-        if (strcmp(token, "GLOBAL") == 0) {  // GLOBAL reserva nome na tabela de definições
+        if (strcmp(token, "GLOBAL") == 0) {  // GLOBAL coloca na tabela
             char* symbol = strtok(NULL, " \t\n");
             if (buscar_rotulo(symbol) != -1) {
                 printf("[erro] Símbolo GLOBAL '%s' já definido como label local.\n", symbol);
@@ -161,7 +161,7 @@ void primeira_passagem(FILE *fp) {
             continue;
         }
 
-        if (strcmp(token, "EXTERN") == 0) {// EXTERN coloca na tabela de uso
+        if (strcmp(token, "EXTERN") == 0) {// EXTERN coloca na tabela 
             char* symbol = strtok(NULL, " \t\n");
             add_symbol_to_use_table(symbol);
             continue;

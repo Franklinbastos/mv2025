@@ -86,7 +86,7 @@ void resolve_symbols() {
     printf("\n[ligador] === Resolvendo símbolos globais e relocando ===\n");
     int current_address_offset = 0;
     
-    //registra globais na tabela final com offset
+    //registra global na tabela final com offset
     for (int i = 0; i < num_object_files; i++) {
         printf("\n[DEBUG] Módulo %d — Offset base: %d\n", i, current_address_offset);
         for (int j = 0; j < object_files[i].def_count; j++) {
@@ -135,8 +135,8 @@ void resolve_symbols() {
     }
 }
 
-void generate_executable(const char *output_filename) {
-    printf("\n[ligador] === Gerando executável: %s ===\n", output_filename);
+void gera_binario(const char *output_filename) {
+    printf("\n[ligador] === Gerando binario: %s ===\n", output_filename);
     FILE *output = fopen(output_filename, "w");
     if (!output) {
         printf("[ligador] Erro ao criar: %s\n", output_filename);
@@ -153,7 +153,7 @@ void generate_executable(const char *output_filename) {
 
     final_memory_size = addr;
     fclose(output);
-    printf("[ligador] Executável '%s' gerado com %d palavras.\n", output_filename, final_memory_size);
+    printf("[ligador] binario '%s' gerado com %d palavras.\n", output_filename, final_memory_size);
 
     printf("\n--- MEMÓRIA FINAL (compactada) ---\n");
     int i = 0;
@@ -190,7 +190,7 @@ int main(int argc, char *argv[]) {
     }
 
     resolve_symbols();
-    generate_executable(output);
+    gera_binario(output);
 
     printf("\n[ligador] ==== FIM DO PROCESSO ====\n");
     return 0;
