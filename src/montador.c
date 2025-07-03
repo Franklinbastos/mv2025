@@ -5,7 +5,6 @@
 #include "../include/linker_defs.h"
 
 #define MAX_LINE 100
-#define DEBUG_VISUAL  // descomente esta linha pra ativar visualização do binário final
 
 ObjectFile obj_file;
 
@@ -283,13 +282,11 @@ int main(int argc, char *argv[]) {
     fclose(fp);
     fclose(saida);
 
-#ifdef DEBUG_VISUAL
     printf("\n--- BINÁRIO FINAL GERADO (VISUAL) ---\n");
     for (int i = 0; i < obj_file.code_size; i++) {
         printf("mem[%03d] = %d\n", i, obj_file.code[i]);
     }
-#endif
-
+    
     printf("[montador] montagem finalizada com sucesso -> '%s'\n", arquivo_saida);
 
     return 0;
