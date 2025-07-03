@@ -267,7 +267,6 @@ void segunda_passagem(FILE *entrada, FILE *saida) {
     fwrite(&obj_file, sizeof(ObjectFile), 1, saida);
 }
 
-
 int main(int argc, char *argv[]) {
     if (argc < 2) {
         printf("Uso: %s <arquivo.asm>\n", argv[0]);
