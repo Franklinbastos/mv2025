@@ -31,7 +31,7 @@ int add_symbol_to_use_table(const char* name) {
     return obj_file.use_count++;// retorna índice do adicionado
 }
 
-int buscar_rotulo(const char *nome) {
+int buscar_rotulo(const char *nome) { //procura o rotulo na tabela e se nao tem, seta endereco com -1
     for (int i = 0; i < obj_file.def_count; i++) {
         if (strcmp(obj_file.def_table[i].name, nome) == 0)
             return obj_file.def_table[i].address;

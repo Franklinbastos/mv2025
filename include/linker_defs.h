@@ -2,18 +2,18 @@
 #define LINKER_DEFS_H
 
 #define MAX_SYMBOLS 100
-#define MAX_CODE_SIZE 320 // Assuming max memory size for now
+#define MAX_CODE_SIZE 320 
 
 typedef struct {
     char name[20];
     int address;
-    int type; // 0 for GLOBAL, 1 for EXTERN
+    int type; // 0 pra GLOBAL, 1 pra EXTERN
 } SymbolEntry;
 
 typedef struct {
     int address;
-    int symbol_index; // Index into the use_table for EXTERN symbols
-    int type; // 0 for relative, 1 for absolute (if needed)
+    int symbol_index; // indice da use_table pra EXTERN 
+    int type; // 0 pra relativo, 1 pra absolute
 } RelocationEntry;
 
 typedef struct {
@@ -27,6 +27,6 @@ typedef struct {
     int rel_count;
 } ObjectFile;
 
-#endif // LINKER_DEFS_H
+#endif 
 
 
