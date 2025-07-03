@@ -11,7 +11,7 @@ ObjectFile obj_file;
 int find_symbol_in_use_table(const char* name) {
     for (int i = 0; i < obj_file.use_count; i++) {
         if (strcmp(obj_file.use_table[i].name, name) == 0) {
-            return i;
+            return i;// retorna indice
         }
     }
     return -1;
@@ -28,7 +28,7 @@ int add_symbol_to_use_table(const char* name) {
     }
     strcpy(obj_file.use_table[obj_file.use_count].name, name);
     printf("[use] símbolo externo: %s\n", name);
-    return obj_file.use_count++;
+    return obj_file.use_count++;// retorna índice do adicionado
 }
 
 int buscar_rotulo(const char *nome) {
@@ -39,40 +39,46 @@ int buscar_rotulo(const char *nome) {
     return -1;
 }
 
+// função interna que trata números ou labels
 int traduz_ou_busca(const char *arg, int current_address) {
     if (isdigit(arg[0]) || (arg[0] == '-' && isdigit(arg[1])))
-        return atoi(arg);
+        return atoi(arg);//ascii pra inteiro
 
+    // descobre se e local    
     int address = buscar_rotulo(arg);
     if (address != -1) {
+        //registra na tabela de relocação
         if (obj_file.rel_count >= MAX_SYMBOLS) {
              printf("[montador] Erro: Limite de entradas na tabela de relocação excedido.\n");
              exit(1);
         }
-        obj_file.rel_table[obj_file.rel_count].address = current_address;
-        obj_file.rel_table[obj_file.rel_count].symbol_index = -1;
-        obj_file.rel_table[obj_file.rel_count].type = 0;
+        obj_file.rel_table[obj_file.rel_count].address = current_address;// endereco do simbolo
+        obj_file.rel_table[obj_file.rel_count].symbol_index = -1;// como e local seta como -1
+        obj_file.rel_table[obj_file.rel_count].type = 0;//relativa
         obj_file.rel_count++;
         printf("[relativo] símbolo local '%s' na posição %d\n", arg, current_address);
-        return address;
+        return address;// já retorna o endereço calculado do label local
     }
 
+    // se for extern
     int symbol_index = add_symbol_to_use_table(arg);
     if (obj_file.rel_count >= MAX_SYMBOLS) {
          printf("[montador] Erro: Limite de entradas na tabela de relocação excedido.\n");
          exit(1);
     }
-    obj_file.rel_table[obj_file.rel_count].address = current_address;
-    obj_file.rel_table[obj_file.rel_count].symbol_index = symbol_index;
-    obj_file.rel_table[obj_file.rel_count].type = 1;
+    obj_file.rel_table[obj_file.rel_count].address = current_address; // onde o valor vai ficar no binário
+    obj_file.rel_table[obj_file.rel_count].symbol_index = symbol_index; // índice na tabela de uso
+    obj_file.rel_table[obj_file.rel_count].type = 1;// absoluta
     obj_file.rel_count++;
     printf("[externo] símbolo '%s' na posição %d\n", arg, current_address);
     return 0;
 }
 
+// adiciona um novo label ou atualiza GLOBAL na tabela de símbolos locais
 void adicionar_rotulo(const char *nome, int endereco, int type) {
-    for (int i = 0; i < obj_file.def_count; i++) {
-        if (strcmp(obj_file.def_table[i].name, nome) == 0) {
+    for (int i = 0; i < obj_file.def_count; i++) {// verifica se o label já existe na tabela
+        if (strcmp(obj_file.def_table[i].name, nome) == 0) {//ve se tem na tabela
+            // se sim atualiza end
             if (obj_file.def_table[i].type == 0 && obj_file.def_table[i].address == 0) { 
                 obj_file.def_table[i].address = endereco;
                 printf("[label] %s (GLOBAL) atualizado para o endereço %d\n", nome, endereco);
@@ -131,19 +137,21 @@ int traduz_reg(const char *reg) {
     return valor;
 }
 
+// faz a primeira varredura no arquivo ASM:
+// calcula endereços das instruções e registra labels, GLOBALs e EXTERNs
 void primeira_passagem(FILE *fp) {
     char linha[MAX_LINE];
     int end_instrucao = 0;
-    memset(&obj_file, 0, sizeof(ObjectFile));
+    memset(&obj_file, 0, sizeof(ObjectFile));// zera struct do objeto
 
     while (fgets(linha, sizeof(linha), fp)) {
-        char *comentario = strstr(linha, "//");
+        char *comentario = strstr(linha, "//");// remove comentários
         if (comentario) *comentario = '\0';
 
-        char *token = strtok(linha, " \t\n");
+        char *token = strtok(linha, " \t\n");// pega a primeira palavra 
         if (!token) continue;
 
-        if (strcmp(token, "GLOBAL") == 0) {
+        if (strcmp(token, "GLOBAL") == 0) {  // GLOBAL reserva nome na tabela de definições
             char* symbol = strtok(NULL, " \t\n");
             if (buscar_rotulo(symbol) != -1) {
                 printf("[erro] Símbolo GLOBAL '%s' já definido como label local.\n", symbol);
@@ -153,20 +161,20 @@ void primeira_passagem(FILE *fp) {
             continue;
         }
 
-        if (strcmp(token, "EXTERN") == 0) {
+        if (strcmp(token, "EXTERN") == 0) {// EXTERN coloca na tabela de uso
             char* symbol = strtok(NULL, " \t\n");
             add_symbol_to_use_table(symbol);
             continue;
         }
 
-        if (strchr(token, ':')) {
+        if (strchr(token, ':')) { // é uma label local
             token[strlen(token) - 1] = '\0';
             adicionar_rotulo(token, end_instrucao, 0);
             token = strtok(NULL, " \t\n");
             if (!token) continue;
         }
 
-        if (strcmp(token, ".word") == 0) {
+        if (strcmp(token, ".word") == 0) { // dados ocupam 1 posição
             end_instrucao += 1;
             continue;
         }
@@ -174,13 +182,14 @@ void primeira_passagem(FILE *fp) {
         int opcode = traduz_instrucao(token);
         if (opcode == -1) continue;
 
+        // ajusta PC conforme instrução
         int usado = 1;
-        if (opcode <= 3) usado += 3;
-        else if (opcode == 4 || opcode == 5) usado += 2;
-        else if (opcode == 6) usado += 1;
-        else if (opcode == 7) usado += 3;
-        else if (opcode == 8 || opcode == 9) usado += 2;
-        else if (opcode == 10 || opcode == 11) usado += 1;
+        if (opcode <= 3) usado += 3;// add, sub, mul, div
+        else if (opcode == 4 || opcode == 5) usado += 2;// mv, st
+        else if (opcode == 6) usado += 1;// jmp
+        else if (opcode == 7) usado += 3;// jeq
+        else if (opcode == 8 || opcode == 9) usado += 2;// jgt, jlt
+        else if (opcode == 10 || opcode == 11) usado += 1; // w, r
 
         end_instrucao += usado;
     }
@@ -188,8 +197,10 @@ void primeira_passagem(FILE *fp) {
     printf("[info] tamanho do código: %d\n", end_instrucao);
 }
 
+// monta o código binário na memória, resolve operandos  
+// grava o objeto final no arquivo de saída
 void segunda_passagem(FILE *entrada, FILE *saida) {
-    rewind(entrada);
+    rewind(entrada);// volta pro início do arquivo
     char linha[MAX_LINE];
     int pc_instrucao = 0;
 
@@ -200,15 +211,15 @@ void segunda_passagem(FILE *entrada, FILE *saida) {
         char *token = strtok(linha, " \t\n");
         if (!token || strcmp(token, "GLOBAL") == 0 || strcmp(token, "EXTERN") == 0) continue;
 
-        if (strchr(token, ':')) {
-            token = strtok(NULL, " \t\n");
-            if (!token) continue;
+        if (strchr(token, ':')) { // se linha começa com label
+            token = strtok(NULL, " \t\n"); // pula label, pega próxima instrução
+            if (!token) continue; // linha só com label, pula
         }
 
-        if (strcmp(token, ".word") == 0) {
+        if (strcmp(token, ".word") == 0) { // trata .word
             token = strtok(NULL, " \t\n");
             if (token) {
-                obj_file.code[pc_instrucao] = atoi(token);
+                obj_file.code[pc_instrucao] = atoi(token); // converte número
                 printf("[word] mem[%03d] = %d\n", pc_instrucao, obj_file.code[pc_instrucao]);
                 pc_instrucao++;
             }
@@ -216,26 +227,30 @@ void segunda_passagem(FILE *entrada, FILE *saida) {
         }
 
         int opcode = traduz_instrucao(token);
-        if (opcode == -1) continue;
+        if (opcode == -1) continue;  // instr inválida, ignora
 
-        obj_file.code[pc_instrucao++] = opcode;
+        obj_file.code[pc_instrucao++] = opcode;// salva opcodigo
 
-        if (opcode <= 3) {
+        // dependendo do opcode, busca e traduz os operandos
+        if (opcode <= 3) {// add, sub, mul, div: 3 registradores
             obj_file.code[pc_instrucao++] = traduz_reg(strtok(NULL, " \t\n"));
             obj_file.code[pc_instrucao++] = traduz_reg(strtok(NULL, " \t\n"));
             obj_file.code[pc_instrucao++] = traduz_reg(strtok(NULL, " \t\n"));
         } else if (opcode >= 4 && opcode <= 11) {
             char* arg1 = strtok(NULL, " \t\n");
             if (opcode == 4 || opcode == 5 || opcode == 8 || opcode == 9) {
+                // mv, st, jgt, jlt: 1 reg + 1 endereço (label ou número)
                  obj_file.code[pc_instrucao] = traduz_reg(arg1);
                  pc_instrucao++;
                  char* arg2 = strtok(NULL, " \t\n");
                  obj_file.code[pc_instrucao] = traduz_ou_busca(arg2, pc_instrucao);
                  pc_instrucao++;
             } else if (opcode == 6 || opcode == 10 || opcode == 11) {
+                // jmp, w, r: 1 endereço
                  obj_file.code[pc_instrucao] = traduz_ou_busca(arg1, pc_instrucao);
                  pc_instrucao++;
             } else if (opcode == 7) {
+                // jeq: 2 regs + 1 endereço
                  obj_file.code[pc_instrucao] = traduz_reg(arg1);
                  pc_instrucao++;
                  char* arg2 = strtok(NULL, " \t\n");
@@ -248,6 +263,7 @@ void segunda_passagem(FILE *entrada, FILE *saida) {
         }
     }
 
+    // grava o objeto inteiro (tabela, código, etc) no arquivo de saída
     fwrite(&obj_file, sizeof(ObjectFile), 1, saida);
 }
 
@@ -259,6 +275,8 @@ int main(int argc, char *argv[]) {
     }
 
     const char *arquivo_entrada = argv[1];
+
+    // monta o nome do arquivo de saída 
     char arquivo_saida[100];
     sprintf(arquivo_saida, "%s.o", arquivo_entrada);
 
@@ -270,6 +288,7 @@ int main(int argc, char *argv[]) {
 
     primeira_passagem(fp);
 
+    // abre arquivo .o para escrever o objeto binário
     FILE *saida = fopen(arquivo_saida, "wb");
     if (!saida) {
         printf("[erro] não foi possível criar o arquivo '%s'\n", arquivo_saida);

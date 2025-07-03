@@ -11,10 +11,10 @@ int num_object_files = 0;
 int final_memory[MAX_CODE_SIZE];
 int final_memory_size = 0;
 
-// Global symbol table for the linker
 SymbolEntry global_symbol_table[MAX_SYMBOLS];
 int global_symbol_count = 0;
 
+// adiciona símbolo global na tabela ou retorna end se já existe
 void add_global_symbol(const char* name, int address) {
     printf("[DEBUG] Tentando adicionar símbolo global: %s -> %d\n", name, address);
     for (int i = 0; i < global_symbol_count; i++) {
@@ -51,10 +51,12 @@ void load_object_file(const char *filename) {
         exit(1);
     }
 
+    // Lê do arquivo para a posição atual do array de ObjectFiles
     fread(&object_files[num_object_files], sizeof(ObjectFile), 1, file);
     fclose(file);
 
     ObjectFile *obj = &object_files[num_object_files];
+    
     printf("[DEBUG] → Código lido (tamanho %d):\n", obj->code_size);
     for (int i = 0; i < obj->code_size; i++) {
         printf("  code[%d] = %d\n", i, obj->code[i]);
@@ -79,14 +81,16 @@ void load_object_file(const char *filename) {
     num_object_files++;
 }
 
+// Monta tabela GLOBAL e resolve relocations  
 void resolve_symbols() {
     printf("\n[ligador] === Resolvendo símbolos globais e relocando ===\n");
     int current_address_offset = 0;
-
+    
+    //registra globais na tabela final com offset
     for (int i = 0; i < num_object_files; i++) {
         printf("\n[DEBUG] Módulo %d — Offset base: %d\n", i, current_address_offset);
         for (int j = 0; j < object_files[i].def_count; j++) {
-            if (object_files[i].def_table[j].type == 0) {
+            if (object_files[i].def_table[j].type == 0) {// 0 = GLOBAL
                 add_global_symbol(
                     object_files[i].def_table[j].name,
                     object_files[i].def_table[j].address + current_address_offset
@@ -102,6 +106,7 @@ void resolve_symbols() {
     }
     final_memory_size = current_address_offset;
 
+    //aplica relocations
     current_address_offset = 0;
     for (int i = 0; i < num_object_files; i++) {
         ObjectFile *obj = &object_files[i];
@@ -109,9 +114,11 @@ void resolve_symbols() {
         for (int j = 0; j < obj->rel_count; j++) {
             int addr = obj->rel_table[j].address;
             if (obj->rel_table[j].type == 0) {
+                 // local soma offset
                 obj->code[addr] += current_address_offset;
                 printf("[ligador] Relativo: addr=%d → %d\n", addr, obj->code[addr]);
             } else {
+                // externo busca endereço final na tabela global
                 int sym_idx = obj->rel_table[j].symbol_index;
                 char *symbol = obj->use_table[sym_idx].name;
                 int final_addr = find_global_symbol(symbol);
@@ -167,6 +174,7 @@ void generate_executable(const char *output_filename) {
 }
 
 int main(int argc, char *argv[]) {
+    // ve se passou pelo menos um object e o nome do executável
     if (argc < 3) {
         printf("Uso: %s <arquivo_saida> <arquivo_objeto1> [arquivo_objeto2 ...]\n", argv[0]);
         return 1;
@@ -175,6 +183,7 @@ int main(int argc, char *argv[]) {
     const char *output = argv[1];
     printf("\n[ligador] ==== INÍCIO DO LIGADOR ====\n");
 
+    // carregar todos os arquivos
     for (int i = 2; i < argc; i++) {
         printf("[ligador] Recebido arquivo objeto: %s\n", argv[i]);
         load_object_file(argv[i]);
