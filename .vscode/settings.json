@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "typeinfo": "c",
+        "compare": "c",
+        "type_traits": "c",
+        "stdio.h": "c"
+    }
+}
