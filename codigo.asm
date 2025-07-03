@@ -1,6 +1,8 @@
 GLOBAL _start          
 GLOBAL _val_to_print   
+GLOBAL label
 EXTERN _print_val      
+
 
 _start:
     mv a0 val1         // move o val1 pro registrador a0
@@ -12,3 +14,9 @@ _start:
 val1: .word 10         // reserva uma posição de memória chamada val1 e coloca o valor 10
 val2: .word 20         
 _val_to_print: .word 0 // reserva espaço para a soma, inicia com 0
+
+label:
+w val1
+  stp
+
+

@@ -1,8 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-
-
 int mem[320];
 int regs[4] = {0, 0, 0, 0}; // a0 = regs[0], a1 = regs[1], etc
 int PC = 0;
